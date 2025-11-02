@@ -140,9 +140,6 @@ elif page == "📊 Sentiment Dashboard":
     @st.cache_data(ttl=60)  # Cache for 1 minute
     def load_sentiment_data():
         try:
-            import psycopg2
-            from sqlalchemy import create_engine
-            
             from sqlite_config import get_sqlite_engine
             engine = get_sqlite_engine()
             
@@ -150,7 +147,7 @@ elif page == "📊 Sentiment Dashboard":
                 SELECT id, comment, sentiment, sentiment_reason, overall_rating, 
                        passenger_country, aircraft, date_published
                 FROM ryanair_reviews 
-                WHERE sentiment IS NOT NULL 
+                WHERE sentiment IS NOT NULL AND sentiment != ''
                 ORDER BY id DESC
             """
             
