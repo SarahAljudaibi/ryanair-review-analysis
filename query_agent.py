@@ -126,11 +126,11 @@ SQL:"""
                 sql_query = self.clean_sql_response(result['response'])
                 return sql_query
             else:
-                return None
+                return self.fallback_sql(user_question)
                 
         except Exception as e:
-            print(f"Error generating SQL: {e}")
-            return None
+            print(f"Ollama not available: {e}")
+            return self.fallback_sql(user_question)
 
     def fix_sql_error(self, original_query, error_message, user_question):
         """Fix SQL query based on error message"""
@@ -218,20 +218,20 @@ Return ONLY the corrected SQL query:"""
             except Exception as e:
                 error_msg = str(e)
                 attempts.append({'sql': sql_query, 'error': error_msg})
-                print(f"❌ SQL Error (attempt {attempt + 1}): {error_msg}")
+                print(f"SQL Error (attempt {attempt + 1}): {error_msg}")
                 
                 if attempt < max_retries - 1 and user_question:
-                    print(f"🔧 Attempting to fix SQL...")
+                    print(f"Attempting to fix SQL...")
                     fixed_query = self.fix_sql_error(sql_query, error_msg, user_question)
                     
                     if fixed_query and fixed_query != sql_query:
-                        print(f"🔄 Fixed SQL: {fixed_query}")
+                        print(f"Fixed SQL: {fixed_query}")
                         sql_query = fixed_query
                     else:
-                        print("❌ Could not fix SQL query")
+                        print("Could not fix SQL query")
                         break
                 else:
-                    print("❌ Max retries reached or no question provided")
+                    print("Max retries reached or no question provided")
                     break
         
         # Log error to database if all attempts failed
@@ -246,12 +246,12 @@ Return ONLY the corrected SQL query:"""
             from create_error_table import log_query_error
             log_query_error(user_question, attempts)
         except Exception as e:
-            print(f"⚠️ Could not log error to database: {e}")
+            print(f"Could not log error to database: {e}")
 
     def format_answer(self, user_question, sql_query, results):
         """Format the results into a natural language answer with better styling"""
         if results is None or results.empty:
-            return "📭 **No data found** for your question. Try rephrasing or asking about different aspects of the reviews."
+            return "**No data found** for your question. Try rephrasing or asking about different aspects of the reviews."
         
         # Determine answer type based on question keywords
         question_lower = user_question.lower()
@@ -262,20 +262,20 @@ Return ONLY the corrected SQL query:"""
             
             # Format based on question type
             if 'how many' in question_lower or 'count' in question_lower:
-                return f"📊 **Total Count:** {value:,} reviews"
+                return f"**Total Count:** {value:,} reviews"
             elif 'average' in question_lower or 'avg' in question_lower:
                 if isinstance(value, (int, float)):
-                    return f"📈 **Average:** {value:.2f}"
-                return f"📈 **Average:** {value}"
+                    return f"**Average:** {value:.2f}"
+                return f"**Average:** {value}"
             elif 'percentage' in question_lower or '%' in question_lower:
-                return f"📊 **Percentage:** {value}%"
+                return f"**Percentage:** {value}%"
             else:
-                return f"✅ **Result:** {value}"
+                return f"**Result:** {value}"
         
         # Two column results (typically category and count/value)
         elif len(results.columns) == 2:
             col1, col2 = results.columns
-            answer = f"📋 **{col1.replace('_', ' ').title()} Analysis:**\n\n"
+            answer = f"**{col1.replace('_', ' ').title()} Analysis:**\n\n"
             
             for i, (_, row) in enumerate(results.head(10).iterrows(), 1):
                 key = row.iloc[0]
@@ -301,7 +301,7 @@ Return ONLY the corrected SQL query:"""
         
         # Multiple columns - show as formatted table
         else:
-            answer = f"📊 **Detailed Results** ({len(results)} rows):\n\n"
+            answer = f"**Detailed Results** ({len(results)} rows):\n\n"
             
             # Show first few rows in a readable format
             for i, (_, row) in enumerate(results.head(5).iterrows(), 1):
@@ -315,7 +315,7 @@ Return ONLY the corrected SQL query:"""
                         formatted_value = "N/A"
                     elif isinstance(value, (int, float)):
                         if col in ['overall_rating', 'seat_comfort', 'cabin_staff_service', 'food_beverages', 'ground_service', 'value_for_money']:
-                            formatted_value = f"{value}/5 ⭐" if value <= 5 else f"{value}/10 ⭐"
+                            formatted_value = f"{value}/5 stars" if value <= 5 else f"{value}/10 stars"
                         else:
                             formatted_value = f"{value:,.2f}" if isinstance(value, float) else f"{value:,}"
                     elif col == 'comment' and len(str(value)) > 150:  # Long comments
@@ -334,7 +334,7 @@ Return ONLY the corrected SQL query:"""
             # Add summary statistics if numeric columns exist
             numeric_cols = results.select_dtypes(include=['number']).columns
             if len(numeric_cols) > 0:
-                answer += "📈 **Quick Stats:**\n"
+                answer += "**Quick Stats:**\n"
                 for col in numeric_cols[:3]:  # Show stats for first 3 numeric columns
                     col_name = col.replace('_', ' ').title()
                     mean_val = results[col].mean()
@@ -348,11 +348,31 @@ Return ONLY the corrected SQL query:"""
             from create_error_table import log_successful_query
             log_successful_query(user_question, sql_query, answer_text)
         except Exception as e:
-            print(f"⚠️ Could not log success to database: {e}")
+            print(f"Could not log success to database: {e}")
 
+    def fallback_sql(self, user_question):
+        """Fallback SQL generation when Ollama is not available"""
+        question_lower = user_question.lower()
+        
+        # Simple pattern matching for common questions
+        if 'how many' in question_lower and 'total' in question_lower:
+            return "SELECT COUNT(*) FROM ryanair_reviews"
+        elif 'how many' in question_lower and 'positive' in question_lower:
+            return "SELECT COUNT(*) FROM ryanair_reviews WHERE sentiment = 'Positive'"
+        elif 'how many' in question_lower and 'negative' in question_lower:
+            return "SELECT COUNT(*) FROM ryanair_reviews WHERE sentiment = 'Negative'"
+        elif 'average rating' in question_lower:
+            return "SELECT AVG(overall_rating) FROM ryanair_reviews WHERE overall_rating IS NOT NULL"
+        elif 'countries' in question_lower and 'most' in question_lower:
+            return "SELECT passenger_country, COUNT(*) as review_count FROM ryanair_reviews WHERE passenger_country IS NOT NULL GROUP BY passenger_country ORDER BY review_count DESC LIMIT 10"
+        elif 'aircraft' in question_lower and 'rating' in question_lower:
+            return "SELECT aircraft, AVG(overall_rating) as avg_rating FROM ryanair_reviews WHERE aircraft IS NOT NULL GROUP BY aircraft ORDER BY avg_rating DESC LIMIT 10"
+        else:
+            return None
+    
     def answer_question(self, user_question):
         """Complete pipeline: question -> SQL -> results -> answer"""
-        print(f"🤔 Question: {user_question}")
+        print(f"Question: {user_question}")
         
         # Generate SQL
         sql_query = self.generate_sql(user_question)
@@ -383,7 +403,7 @@ Return ONLY the corrected SQL query:"""
             • "What's the average rating by country?"
             • "Show me reviews with rating above 8"""
         
-        print(f"🔍 Generated SQL: {sql_query}")
+        print(f"Generated SQL: {sql_query}")
         
         # Execute query with auto-fix
         results = self.execute_query(sql_query, user_question)
@@ -407,7 +427,7 @@ Return ONLY the corrected SQL query:"""
         
         # Format answer
         answer = self.format_answer(user_question, sql_query, results)
-        print(f"✅ Answer: {answer}")
+        print(f"Answer: {answer}")
         
         # Log successful query
         self.log_success_to_db(user_question, sql_query, answer)
