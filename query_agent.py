@@ -2,14 +2,18 @@ import requests
 import json
 import pandas as pd
 from sqlalchemy import create_engine, text
+import os
+import streamlit as st
 
 # Database configuration
 from sqlite_config import get_sqlite_engine
 
 class QueryAgent:
-    def __init__(self, ollama_url="http://localhost:11434"):
-        self.ollama_url = ollama_url
-        self.model = "llama3.2"  # Change to your preferred Ollama model
+    def __init__(self):
+        # Get API credentials securely from environment
+        self.hf_api_key = os.getenv('HF_API_KEY') or st.secrets.get('HF_API_KEY', '')
+        self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
+        self.model = "llama3.2"
         self.engine = get_sqlite_engine()
         self.query_cache = {}
         
@@ -105,9 +109,25 @@ SQL:"""
         try:
             prompt = self.get_query_prompt(user_question)
             
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
+            # Prepare headers for API authentication
+            headers = {'Content-Type': 'application/json'}
+            if self.hf_api_key and 'huggingface' in self.ollama_url:
+                headers['Authorization'] = f'Bearer {self.hf_api_key}'
+            
+            # Different payload format for Hugging Face vs Ollama
+            if 'huggingface' in self.ollama_url:
+                payload = {
+                    "inputs": prompt,
+                    "parameters": {
+                        "temperature": 0.1,
+                        "max_new_tokens": 100,
+                        "return_full_text": False
+                    }
+                }
+                response = requests.post(self.ollama_url, json=payload, headers=headers, timeout=15)
+            else:
+                # Original Ollama format
+                payload = {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
@@ -116,19 +136,28 @@ SQL:"""
                         "top_p": 0.9,
                         "num_predict": 100
                     }
-                },
-                timeout=10
-            )
+                }
+                response = requests.post(f"{self.ollama_url}/api/generate", json=payload, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 result = response.json()
-                sql_query = self.clean_sql_response(result['response'])
-                return sql_query
+                
+                # Extract response based on API type
+                if 'huggingface' in self.ollama_url:
+                    if isinstance(result, list) and len(result) > 0:
+                        sql_query = self.clean_sql_response(result[0].get('generated_text', ''))
+                    else:
+                        return self.fallback_sql(user_question)
+                else:
+                    sql_query = self.clean_sql_response(result.get('response', ''))
+                
+                return sql_query if sql_query else self.fallback_sql(user_question)
             else:
+                print(f"API Error: {response.status_code}")
                 return self.fallback_sql(user_question)
                 
         except Exception as e:
-            print(f"Ollama not available: {e}")
+            print(f"API not available: {e}")
             return self.fallback_sql(user_question)
 
     def fix_sql_error(self, original_query, error_message, user_question):
