@@ -5,19 +5,13 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 # Database configuration
-DB_CONFIG = {
-    'host': 'localhost',
-    'database': 'ryanaircs',
-    'user': 'postgres',
-    'password': 'admin',
-    'port': '5432'
-}
+from sqlite_config import get_sqlite_engine
 
 class QueryAgent:
     def __init__(self, ollama_url="http://localhost:11434"):
         self.ollama_url = ollama_url
         self.model = "llama3.2"  # Change to your preferred Ollama model
-        self.engine = create_engine(f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}", pool_pre_ping=True)
+        self.engine = get_sqlite_engine()
         self.query_cache = {}
         
     def get_query_prompt(self, user_question):

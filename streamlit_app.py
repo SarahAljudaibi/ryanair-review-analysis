@@ -143,15 +143,8 @@ elif page == "📊 Sentiment Dashboard":
             import psycopg2
             from sqlalchemy import create_engine
             
-            DB_CONFIG = {
-                'host': 'localhost',
-                'database': 'ryanaircs',
-                'user': 'postgres',
-                'password': 'admin',
-                'port': '5432'
-            }
-            
-            engine = create_engine(f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
+            from sqlite_config import get_sqlite_engine
+            engine = get_sqlite_engine()
             
             query = """
                 SELECT id, comment, sentiment, sentiment_reason, overall_rating, 

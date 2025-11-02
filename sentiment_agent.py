@@ -1,17 +1,11 @@
 import requests
 import json
-import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import pandas as pd
+import sqlite3
 
 # Database configuration
-DB_CONFIG = {
-    'host': 'localhost',
-    'database': 'ryanaircs',
-    'user': 'postgres',
-    'password': 'admin',
-    'port': '5432'
-}
+from sqlite_config import get_sqlite_engine
 
 class SentimentAgent:
     def __init__(self, ollama_url="http://localhost:11434"):
@@ -73,57 +67,52 @@ Review: "{review_text}"
     def add_sentiment_column(self):
         """Add sentiment columns to database table"""
         try:
-            conn = psycopg2.connect(**DB_CONFIG)
-            cursor = conn.cursor()
-            
-            # Add sentiment columns if they don't exist
-            cursor.execute("""
-                ALTER TABLE ryanair_reviews 
-                ADD COLUMN IF NOT EXISTS sentiment VARCHAR(20),
-                ADD COLUMN IF NOT EXISTS sentiment_reason TEXT;
-            """)
-            conn.commit()
-            print("✅ Sentiment columns added to database")
-            
+            engine = get_sqlite_engine()
+            with engine.connect() as conn:
+                # SQLite ALTER TABLE syntax
+                try:
+                    conn.execute(text("ALTER TABLE ryanair_reviews ADD COLUMN sentiment TEXT"))
+                except:
+                    pass  # Column already exists
+                try:
+                    conn.execute(text("ALTER TABLE ryanair_reviews ADD COLUMN sentiment_reason TEXT"))
+                except:
+                    pass  # Column already exists
+                conn.commit()
+            print("Sentiment columns ready")
         except Exception as e:
             print(f"Error adding columns: {e}")
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
 
     def process_reviews(self):
         """Process reviews and update with sentiment analysis"""
         try:
-            # Get reviews without sentiment analysis
-            engine = create_engine(f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
+            engine = get_sqlite_engine()
             
             # Count unprocessed reviews first
             count_query = """
                 SELECT COUNT(*) as unprocessed_count
                 FROM ryanair_reviews 
-                WHERE sentiment IS NULL AND comment IS NOT NULL
+                WHERE (sentiment IS NULL OR sentiment = '') AND comment IS NOT NULL AND comment != ''
             """
             count_df = pd.read_sql(count_query, engine)
             total_unprocessed = count_df.iloc[0]['unprocessed_count']
             
             if total_unprocessed == 0:
-                print("✅ All reviews already have sentiment analysis!")
+                print("All reviews already have sentiment analysis!")
                 return
             
-            print(f"📊 Found {total_unprocessed} reviews without sentiment analysis")
-            
-            print(f"🔄 Processing ALL {total_unprocessed} unanalyzed reviews...")
+            print(f"Found {total_unprocessed} reviews without sentiment analysis")
             
             query = """
                 SELECT id, comment 
                 FROM ryanair_reviews 
-                WHERE sentiment IS NULL 
-                AND comment IS NOT NULL
+                WHERE (sentiment IS NULL OR sentiment = '') 
+                AND comment IS NOT NULL AND comment != ''
+                LIMIT 10
             """
             
             df = pd.read_sql(query, engine)
-            print(f"📊 Processing {len(df)} reviews for sentiment analysis...")
+            print(f"Processing {len(df)} reviews for sentiment analysis...")
             
             for idx, row in df.iterrows():
                 review_id = row['id']
@@ -136,24 +125,19 @@ Review: "{review_text}"
                 
                 if sentiment_result:
                     # Update database
-                    conn = psycopg2.connect(**DB_CONFIG)
-                    cursor = conn.cursor()
+                    with engine.connect() as conn:
+                        conn.execute(text("""
+                            UPDATE ryanair_reviews 
+                            SET sentiment = :sentiment, sentiment_reason = :reason 
+                            WHERE id = :id
+                        """), {
+                            'sentiment': sentiment_result['sentiment'],
+                            'reason': sentiment_result['reason'],
+                            'id': review_id
+                        })
+                        conn.commit()
                     
-                    cursor.execute("""
-                        UPDATE ryanair_reviews 
-                        SET sentiment = %s, sentiment_reason = %s 
-                        WHERE id = %s
-                    """, (
-                        sentiment_result['sentiment'],
-                        sentiment_result['reason'],
-                        review_id
-                    ))
-                    
-                    conn.commit()
-                    cursor.close()
-                    conn.close()
-                    
-                    print(f"✅ Updated review {review_id}: {sentiment_result['sentiment']}")
+                    print(f"Updated review {review_id}: {sentiment_result['sentiment']}")
                 
         except Exception as e:
             print(f"Error processing reviews: {e}")
@@ -161,30 +145,28 @@ Review: "{review_text}"
     def add_new_review(self, comment, rating=None, country=None, aircraft=None, traveller_type=None, origin=None, destination=None):
         """Add new review to database and return its ID"""
         try:
-            conn = psycopg2.connect(**DB_CONFIG)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT INTO ryanair_reviews (
-                    comment, overall_rating, passenger_country, aircraft, 
-                    type_of_traveller, origin, destination, date_published
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE)
-                RETURNING id
-            """, (comment, rating, country, aircraft, traveller_type, origin, destination))
-            
-            review_id = cursor.fetchone()[0]
-            conn.commit()
-            
-            return review_id
-            
+            engine = get_sqlite_engine()
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    INSERT INTO ryanair_reviews (
+                        comment, overall_rating, passenger_country, aircraft, 
+                        type_of_traveller, origin, destination, date_published
+                    )
+                    VALUES (:comment, :rating, :country, :aircraft, :traveller_type, :origin, :destination, date('now'))
+                """), {
+                    'comment': comment,
+                    'rating': rating,
+                    'country': country,
+                    'aircraft': aircraft,
+                    'traveller_type': traveller_type,
+                    'origin': origin,
+                    'destination': destination
+                })
+                conn.commit()
+                return result.lastrowid
         except Exception as e:
             print(f"Error adding review: {e}")
             return None
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
     
     def add_reviews_from_excel(self, excel_path):
         """Add reviews from Excel file to database"""
