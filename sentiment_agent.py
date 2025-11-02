@@ -2,7 +2,6 @@ import requests
 import json
 from sqlalchemy import create_engine, text
 import pandas as pd
-import sqlite3
 
 # Database configuration
 from sqlite_config import get_sqlite_engine

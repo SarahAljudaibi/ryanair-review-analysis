@@ -1,4 +1,3 @@
-import sqlite3
 from datetime import datetime
 from sqlite_config import get_sqlite_engine
 from sqlalchemy import text

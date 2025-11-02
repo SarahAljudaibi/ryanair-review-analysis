@@ -1,8 +1,7 @@
 import requests
 import json
-import psycopg2
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # Database configuration
 from sqlite_config import get_sqlite_engine
