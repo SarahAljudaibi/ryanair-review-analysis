@@ -144,8 +144,10 @@ elif page == "📊 Sentiment Dashboard":
             engine = get_sqlite_engine()
             
             query = """
-                SELECT id, comment, sentiment, sentiment_reason, overall_rating, 
-                       passenger_country, aircraft, date_published
+                SELECT id, Comment as comment, sentiment, sentiment_reason, 
+                       "Overall Rating" as overall_rating, 
+                       "Passenger Country" as passenger_country, 
+                       Aircraft as aircraft, "Date Published" as date_published
                 FROM ryanair_reviews 
                 WHERE sentiment IS NOT NULL AND sentiment != ''
                 ORDER BY id DESC

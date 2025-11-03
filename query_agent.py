@@ -390,11 +390,11 @@ Return ONLY the corrected SQL query:"""
         elif 'how many' in question_lower and 'negative' in question_lower:
             return "SELECT COUNT(*) FROM ryanair_reviews WHERE sentiment = 'Negative'"
         elif 'average rating' in question_lower:
-            return "SELECT AVG(overall_rating) FROM ryanair_reviews WHERE overall_rating IS NOT NULL"
+            return "SELECT AVG(\"Overall Rating\") FROM ryanair_reviews WHERE \"Overall Rating\" IS NOT NULL"
         elif 'countries' in question_lower and 'most' in question_lower:
-            return "SELECT passenger_country, COUNT(*) as review_count FROM ryanair_reviews WHERE passenger_country IS NOT NULL GROUP BY passenger_country ORDER BY review_count DESC LIMIT 10"
+            return "SELECT \"Passenger Country\", COUNT(*) as review_count FROM ryanair_reviews WHERE \"Passenger Country\" IS NOT NULL GROUP BY \"Passenger Country\" ORDER BY review_count DESC LIMIT 10"
         elif 'aircraft' in question_lower and 'rating' in question_lower:
-            return "SELECT aircraft, AVG(overall_rating) as avg_rating FROM ryanair_reviews WHERE aircraft IS NOT NULL GROUP BY aircraft ORDER BY avg_rating DESC LIMIT 10"
+            return "SELECT Aircraft, AVG(\"Overall Rating\") as avg_rating FROM ryanair_reviews WHERE Aircraft IS NOT NULL GROUP BY Aircraft ORDER BY avg_rating DESC LIMIT 10"
         else:
             return None
     
