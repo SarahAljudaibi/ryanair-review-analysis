@@ -91,7 +91,7 @@ Review: "{review_text}"
             count_query = """
                 SELECT COUNT(*) as unprocessed_count
                 FROM ryanair_reviews 
-                WHERE (sentiment IS NULL OR sentiment = '') AND comment IS NOT NULL AND comment != ''
+                WHERE (sentiment IS NULL OR sentiment = '') AND Comment IS NOT NULL AND Comment != ''
             """
             count_df = pd.read_sql(count_query, engine)
             total_unprocessed = count_df.iloc[0]['unprocessed_count']
@@ -103,11 +103,11 @@ Review: "{review_text}"
             print(f"Found {total_unprocessed} reviews without sentiment analysis")
             
             query = """
-                SELECT id, comment 
+                SELECT id, Comment as comment 
                 FROM ryanair_reviews 
                 WHERE (sentiment IS NULL OR sentiment = '') 
-                AND comment IS NOT NULL AND comment != ''
-                LIMIT 10
+                AND Comment IS NOT NULL AND Comment != ''
+                ORDER BY id
             """
             
             df = pd.read_sql(query, engine)
@@ -123,6 +123,13 @@ Review: "{review_text}"
                 sentiment_result = self.analyze_sentiment(comment)
                 
                 if sentiment_result:
+                    # Ensure reason is a string (handle list responses)
+                    reason = sentiment_result['reason']
+                    if isinstance(reason, list):
+                        reason = ', '.join(reason)
+                    elif not isinstance(reason, str):
+                        reason = str(reason)
+                    
                     # Update database
                     with engine.connect() as conn:
                         conn.execute(text("""
@@ -131,7 +138,7 @@ Review: "{review_text}"
                             WHERE id = :id
                         """), {
                             'sentiment': sentiment_result['sentiment'],
-                            'reason': sentiment_result['reason'],
+                            'reason': reason,
                             'id': review_id
                         })
                         conn.commit()
@@ -148,8 +155,8 @@ Review: "{review_text}"
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     INSERT INTO ryanair_reviews (
-                        comment, overall_rating, passenger_country, aircraft, 
-                        type_of_traveller, origin, destination, date_published
+                        Comment, "Overall Rating", "Passenger Country", Aircraft, 
+                        "Type Of Traveller", Origin, Destination, "Date Published"
                     )
                     VALUES (:comment, :rating, :country, :aircraft, :traveller_type, :origin, :destination, date('now'))
                 """), {
@@ -170,8 +177,6 @@ Review: "{review_text}"
     def add_reviews_from_excel(self, excel_path):
         """Add reviews from Excel file to database"""
         try:
-            import pandas as pd
-            
             # Read Excel file
             df = pd.read_excel(excel_path)
             print(f"Loaded Excel with {len(df)} rows")
@@ -180,8 +185,7 @@ Review: "{review_text}"
             df.columns = df.columns.str.strip().str.replace(' ', '_').str.lower()
             
             review_ids = []
-            conn = psycopg2.connect(**DB_CONFIG)
-            cursor = conn.cursor()
+            engine = get_sqlite_engine()
             
             for _, row in df.iterrows():
                 # Extract data from row
@@ -194,36 +198,38 @@ Review: "{review_text}"
                 destination = row.get('destination', None)
                 
                 if comment:  # Only add if comment exists
-                    cursor.execute("""
-                        INSERT INTO ryanair_reviews (
-                            comment, overall_rating, passenger_country, aircraft,
-                            type_of_traveller, origin, destination, date_published
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE)
-                        RETURNING id
-                    """, (comment, rating, country, aircraft, traveller_type, origin, destination))
-                    
-                    review_id = cursor.fetchone()[0]
-                    review_ids.append(review_id)
+                    with engine.connect() as conn:
+                        result = conn.execute(text("""
+                            INSERT INTO ryanair_reviews (
+                                Comment, "Overall Rating", "Passenger Country", Aircraft,
+                                "Type Of Traveller", Origin, Destination, "Date Published"
+                            )
+                            VALUES (:comment, :rating, :country, :aircraft, :traveller_type, :origin, :destination, date('now'))
+                        """), {
+                            'comment': comment,
+                            'rating': rating,
+                            'country': country,
+                            'aircraft': aircraft,
+                            'traveller_type': traveller_type,
+                            'origin': origin,
+                            'destination': destination
+                        })
+                        conn.commit()
+                        review_ids.append(result.lastrowid)
             
-            conn.commit()
             return review_ids
             
         except Exception as e:
             print(f"Error adding reviews from Excel: {e}")
             return []
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
     
     def process_single_review(self, review_id):
         """Process sentiment analysis for a single review"""
         try:
-            engine = create_engine(f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
+            engine = get_sqlite_engine()
             
             # Get the specific review
-            query = "SELECT id, comment FROM ryanair_reviews WHERE id = %s AND comment IS NOT NULL"
+            query = "SELECT id, Comment as comment FROM ryanair_reviews WHERE id = ? AND Comment IS NOT NULL"
             df = pd.read_sql(query, engine, params=[review_id])
             
             if df.empty:
@@ -239,25 +245,27 @@ Review: "{review_text}"
             sentiment_result = self.analyze_sentiment(comment)
             
             if sentiment_result:
+                # Ensure reason is a string (handle list responses)
+                reason = sentiment_result['reason']
+                if isinstance(reason, list):
+                    reason = ', '.join(reason)
+                elif not isinstance(reason, str):
+                    reason = str(reason)
+                
                 # Update database
-                conn = psycopg2.connect(**DB_CONFIG)
-                cursor = conn.cursor()
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        UPDATE ryanair_reviews 
+                        SET sentiment = :sentiment, sentiment_reason = :reason 
+                        WHERE id = :id
+                    """), {
+                        'sentiment': sentiment_result['sentiment'],
+                        'reason': reason,
+                        'id': review_id
+                    })
+                    conn.commit()
                 
-                cursor.execute("""
-                    UPDATE ryanair_reviews 
-                    SET sentiment = %s, sentiment_reason = %s 
-                    WHERE id = %s
-                """, (
-                    sentiment_result['sentiment'],
-                    sentiment_result['reason'],
-                    review_id
-                ))
-                
-                conn.commit()
-                cursor.close()
-                conn.close()
-                
-                print(f"✅ Sentiment: {sentiment_result['sentiment']} - {sentiment_result['reason']}")
+                print(f"Sentiment: {sentiment_result['sentiment']} - {sentiment_result['reason']}")
             
         except Exception as e:
             print(f"Error processing single review: {e}")
