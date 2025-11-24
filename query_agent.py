@@ -8,30 +8,36 @@ import re
 
 class QueryAgent:
     def __init__(self):
-        # Load HF token
+        # --- HuggingFace Token ---
         self.token = st.secrets["HF_API_KEY"]
 
-        # Use conversational-capable model
-        self.client = InferenceClient(
-            model="meta-llama/Llama-3.2-1B-Instruct",   # or replace with Qwen 1.5B if you prefer text-generation
+        # --- Main (Fast) SQL Generation Model ---
+        self.client_main = InferenceClient(
+            model="meta-llama/Llama-3.2-1B-Instruct",
             token=self.token
         )
 
-        # DB engine
+        # --- Stronger Model for SQL Repair ---
+        self.client_repair = InferenceClient(
+            model="Qwen/Qwen2.5-7B-Instruct",
+            token=self.token
+        )
+
+        # --- SQLite Engine ---
         self.engine = get_sqlite_engine()
         self.query_cache = {}
 
-    # -------------------- Helper Methods --------------------
-
+    # -----------------------------------------------------------
+    # PROMPT BUILDER
+    # -----------------------------------------------------------
     def get_query_prompt(self, user_question: str) -> str:
-        """Build a structured few-shot SQL instruction prompt."""
         return f"""
 You are an expert SQL assistant. Convert the user's question into a valid SQLite query
 for a table named ryanair_reviews.
 
-Only output SQL — no explanation.
+Only output SQL — no explanations.
 
-Example questions and SQL:
+Examples:
 
 Q: How many positive reviews are there?
 A: SELECT COUNT(*) FROM ryanair_reviews WHERE sentiment = 'Positive';
@@ -41,80 +47,161 @@ A: SELECT "Passenger Country", AVG("Overall Rating") AS avg_rating
    FROM ryanair_reviews
    GROUP BY "Passenger Country";
 
-Now answer:
+Now convert this question:
 Q: {user_question}
 A:
 """
 
+    # -----------------------------------------------------------
+    # MAIN SQL GENERATION
+    # -----------------------------------------------------------
     def generate_sql(self, user_question: str) -> str:
-        """Generate SQL using conversational endpoint (required by Streamlit Cloud)."""
         prompt = self.get_query_prompt(user_question)
 
         try:
-            response = self.client.chat_completion(
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
+            response = self.client_main.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=200,
                 temperature=0.1
             )
-    
+
             model_text = response.choices[0].message["content"]
             sql_query = self.clean_sql_response(model_text)
             return sql_query
 
         except Exception as e:
-            st.warning(f"⚠️ Error generating SQL via Hugging Face: {e}")
+            st.warning(f"⚠️ Error generating SQL: {e}")
             return self.fallback_sql(user_question)
 
+    # -----------------------------------------------------------
+    # SQL POST-PROCESSING
+    # -----------------------------------------------------------
     def clean_sql_response(self, text: str) -> str:
-        """Extract a clean SQL statement from the model output."""
+        """Clean up model output to extract pure SQL."""
         text = text.strip()
         text = re.sub(r"```sql|```", "", text)
         if text.lower().startswith("sql:"):
-            text = text[4:]
-        return text.strip().split(";")[0] + ";"
+            text = text[4:].strip()
+        return text.split(";")[0].strip() + ";"
 
+    # -----------------------------------------------------------
+    # FALLBACK SQL RULES
+    # -----------------------------------------------------------
     def fallback_sql(self, user_question: str) -> str:
-        """Provide a fallback SQL query when generation fails."""
         q = user_question.lower()
+
         if "positive" in q:
             return "SELECT COUNT(*) FROM ryanair_reviews WHERE sentiment = 'Positive';"
-        elif "negative" in q:
+
+        if "negative" in q:
             return "SELECT COUNT(*) FROM ryanair_reviews WHERE sentiment = 'Negative';"
-        elif "average" in q and "country" in q:
-            return (
-                'SELECT "Passenger Country", AVG("Overall Rating") '
-                'FROM ryanair_reviews GROUP BY "Passenger Country";'
-            )
-        else:
-            return "SELECT COUNT(*) FROM ryanair_reviews;"
 
-    def execute_query(self, sql_query: str) -> pd.DataFrame:
-        """Execute SQL query."""
+        if "average" in q and "country" in q:
+            return """
+                SELECT "Passenger Country",
+                       AVG("Overall Rating")
+                FROM ryanair_reviews
+                GROUP BY "Passenger Country";
+            """
+
+        return "SELECT COUNT(*) FROM ryanair_reviews;"  # Safe default
+
+    # -----------------------------------------------------------
+    # SQL REPAIR LOGIC (5 ATTEMPTS)
+    # -----------------------------------------------------------
+    def repair_sql(self, bad_sql: str, error_message: str, user_question: str) -> str:
+        for attempt in range(1, 6):
+            st.info(f"🔧 Attempt {attempt}/5 to fix SQL error...")
+
+            repair_prompt = f"""
+You are an expert SQLite engineer.
+The SQL query failed. Fix it.
+
+User question:
+{user_question}
+
+Bad SQL:
+{bad_sql}
+
+Error:
+{error_message}
+
+Return ONLY corrected SQL.
+"""
+
+            try:
+                response = self.client_repair.chat_completion(
+                    messages=[{"role": "user", "content": repair_prompt}],
+                    max_tokens=200,
+                    temperature=0.0
+                )
+
+                fixed_sql = self.clean_sql_response(
+                    response.choices[0].message["content"]
+                )
+
+                # Try executing repaired SQL
+                try:
+                    pd.read_sql(text(fixed_sql), self.engine)
+                    return fixed_sql  # Success!
+                except Exception:
+                    continue  # Try again
+
+            except Exception:
+                continue
+
+        return None  # All 5 attempts failed
+
+    # -----------------------------------------------------------
+    # SQL EXECUTION (WITH AUTO-REPAIR)
+    # -----------------------------------------------------------
+    def execute_query(self, sql_query: str, user_question: str = None) -> pd.DataFrame:
         try:
-            df = pd.read_sql(text(sql_query), self.engine)
-            return df
-        except Exception as e:
-            return pd.DataFrame([{"Error": str(e)}])
+            return pd.read_sql(text(sql_query), self.engine)
 
+        except Exception as error:
+            if user_question is None:
+                return pd.DataFrame([{"Error": str(error)}])
+
+            # Try to fix SQL
+            fixed_sql = self.repair_sql(sql_query, str(error), user_question)
+
+            if fixed_sql:
+                st.success("✅ SQL error fixed automatically!")
+                return pd.read_sql(text(fixed_sql), self.engine)
+
+            # Unfixable
+            return pd.DataFrame([{"UnfixableError": str(error)}])
+
+    # -----------------------------------------------------------
+    # RESULT FORMATTING
+    # -----------------------------------------------------------
     def format_answer(self, user_question: str, df: pd.DataFrame) -> str:
-        """Format SQL output."""
         if df.empty:
             return "No results found."
-        elif "Error" in df.columns:
+
+        if "Error" in df.columns:
             return f"⚠️ SQL Error: {df.iloc[0]['Error']}"
-        elif len(df.columns) == 1:
+
+        if "UnfixableError" in df.columns:
+            return (
+                "😔 Sorry, I couldn't fix this SQL even after 5 attempts. "
+                "Try rephrasing your question."
+            )
+
+        if len(df.columns) == 1:
             return f"**Result:** {df.iloc[0, 0]}"
-        else:
-            return df.to_markdown(index=False)
 
+        return df.to_markdown(index=False)
+
+    # -----------------------------------------------------------
+    # MAIN USER-FACING PIPELINE
+    # -----------------------------------------------------------
     def answer_question(self, user_question: str) -> str:
-        """Full pipeline: question → SQL → execution → formatted answer."""
         sql_query = self.generate_sql(user_question)
-        if not sql_query:
-            return "I couldn't generate an SQL query for that question."
 
-        df = self.execute_query(sql_query)
-        answer = self.format_answer(user_question, df)
-        return answer
+        if not sql_query:
+            return "I couldn't generate a SQL query for that question."
+
+        df = self.execute_query(sql_query, user_question=user_question)
+        return self.format_answer(user_question, df)
