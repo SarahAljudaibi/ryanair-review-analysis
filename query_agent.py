@@ -85,37 +85,39 @@ sentiment: "Positive"
 sentiment_reason: "impressed with price, soft seats, plenty of legroom"
 
 IMPORTANT:
-When user asks about COMPLAINTS or ISSUES such as:
-- high fees
-- expensive prices
-- extra charges
-- hidden fees
-- delays
-- rude staff
-- lost baggage
-- bad service
+When the user asks about ANY topic in the reviews — whether positive, neutral, or negative —
+such as:
 
-ALWAYS filter using a **hybrid filter** on BOTH:
-1. comment
-2. sentiment_reason
+- high fees, expensive prices, extra charges, hidden fees
+- delays, late flights, waiting times
+- rude staff, excellent staff, good service, bad service
+- lost baggage, baggage issues
+- seat comfort, legroom, soft seats
+- cleanliness, cabin condition
+- value for money, price satisfaction
+- turbulence, smooth flight
+- entertainment, WiFi
+- food quality, beverages
+- boarding experience, ground service
+
+You MUST search for these topics using a HYBRID FILTER on BOTH columns:
+1. comment (long free text)
+2. sentiment_reason (AI-generated list of topic keywords)
 
 Because:
-- comment contains raw text
-- sentiment_reason contains extracted topics that summarize long comments
+- The comment may contain long descriptions.
+- sentiment_reason contains extracted topics that help identify meaning.
 
 Always use SQL like:
 
 WHERE (
-    LOWER(comment) LIKE '%fee%' OR
-    LOWER(comment) LIKE '%expensive%' OR
-    LOWER(comment) LIKE '%charge%' OR
-    LOWER(comment) LIKE '%price%' OR
-    LOWER(comment) LIKE '%cost%'
+    LOWER(comment) LIKE '%<keyword1>%' OR
+    LOWER(comment) LIKE '%<synonym1>%' OR
+    LOWER(comment) LIKE '%<synonym2>%' 
 )
 OR (
-    LOWER(sentiment_reason) LIKE '%fee%' OR
-    LOWER(sentiment_reason) LIKE '%price%' OR
-    LOWER(sentiment_reason) LIKE '%charge%'
+    LOWER(sentiment_reason) LIKE '%<keyword1>%' OR
+    LOWER(sentiment_reason) LIKE '%<synonym1>%'
 )
 
 Examples:
