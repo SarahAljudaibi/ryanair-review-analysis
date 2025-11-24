@@ -15,7 +15,7 @@ class QueryAgent:
 
         # ✅ Initialize client using Llama-3.2-1B-Instruct
         self.client = InferenceClient(
-            model="meta-llama/Llama-3.2-1B-Instruct",
+            model="mistralai/Mistral-7B-Instruct-v0.3",#"meta-llama/Llama-3.2-1B-Instruct",
             token=self.token
         )
 
