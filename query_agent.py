@@ -51,16 +51,15 @@ A:
         prompt = self.get_query_prompt(user_question)
 
         try:
-            response = self.client.conversational(
+            response = self.client.chat_completion(
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                max_new_tokens=200,
-                temperature=0.1,
+                max_tokens=200,
+                temperature=0.1
             )
-
-            # Extract output text
-            model_text = response.get("generated_text", "")
+    
+            model_text = response.choices[0].message["content"]
             sql_query = self.clean_sql_response(model_text)
             return sql_query
 
