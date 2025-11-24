@@ -13,7 +13,7 @@ class QueryAgent:
 
         # Main SQL generation (fast)
         self.client_main = InferenceClient(
-            model="mistralai/Mistral-7B-Instruct-v0.3",
+            model="Qwen/Qwen2.5-1.5B-Instruct",
             token=self.token
         )
 
