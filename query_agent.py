@@ -213,18 +213,38 @@ Rewritten:
             st.info(f"🔧 Attempt {attempt}/5 to fix SQL...")
 
             prompt = f"""
-Fix the SQL so it works in PostgreSQL.
+You are an expert PostgreSQL SQL mechanic. 
+Your job is to FIX invalid SQL queries so they successfully run.
+
+You MUST follow these rules:
+
+1. ALWAYS generate correct PostgreSQL SQL.
+2. ALWAYS use the correct table name: ryanair_reviews
+3. ONLY use existing column names:
+   id, date_published, overall_rating, passenger_country, trip_verified,
+   comment_title, comment, aircraft, type_of_traveller, seat_type, 
+   origin, destination, date_flown, seat_comfort, cabin_staff_service,
+   food_beverages, ground_service, value_for_money, recommended,
+   inflight_entertainment, wifi_connectivity, sentiment, sentiment_reason
+
+4. When the query uses grouping or aggregation, ALWAYS include GROUP BY.
+5. Never guess column names. Only use the list above.
+6. If the user question requests a count by category, generate:
+   SELECT <column>, COUNT(*) FROM ryanair_reviews GROUP BY <column>
+7. If the query contains errors, FIX them step-by-step.
+8. If the SQL is structurally wrong, rewrite it from scratch.
 
 User question:
 {user_question}
 
-Bad SQL:
+Broken SQL:
 {bad_sql}
 
-Error:
+SQL Error:
 {error_msg}
 
-Return ONLY the fixed SQL.
+Now produce VALID PostgreSQL SQL that answers the question.
+Return ONLY the fixed SQL (no explanation)
 """
 
             try:
