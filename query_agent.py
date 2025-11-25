@@ -301,10 +301,13 @@ Return ONLY the fixed SQL (no explanation)
     def answer_question(self, user_question: str) -> str:
 
         cleaned = self.interpret_question(user_question)
+        st.info(f"🧠 Rewritten question: `{cleaned}`")
         sql_query = self.generate_sql(cleaned)
 
         if not sql_query:
-            return "Couldn't generate SQL for that question."
+            return "Couldn't generate SQL for that question."            
+        st.code(sql_query, language="sql")  # ⬅ SHOW GENERATED SQL
+
 
         df = self.execute_query(sql_query, cleaned)
         return self.format_answer(df)
