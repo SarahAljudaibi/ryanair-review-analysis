@@ -19,7 +19,7 @@ class QueryAgent:
 
         # Strong repair & intent reinterpretation model
         self.client_repair = InferenceClient(
-            model="Qwen/Qwen2.5-7B-Instruct",
+            model="google/gemma-2-9b-it",#"Qwen/Qwen2.5-7B-Instruct",
             token=self.token
         )
 
