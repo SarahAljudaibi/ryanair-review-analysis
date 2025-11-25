@@ -13,7 +13,7 @@ class QueryAgent:
 
         # Main SQL generation (fast)
         self.client_main = InferenceClient(
-            model="meta-llama/Llama-3.2-1B-Instruct",
+            model="google/gemma-2-9b-it",#"meta-llama/Llama-3.2-1B-Instruct",
             token=self.token
         )
 
