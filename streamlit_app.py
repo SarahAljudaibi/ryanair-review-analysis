@@ -219,7 +219,7 @@ elif page == "📊 Sentiment Dashboard":
                 with col1:
                     st.write("**Country:**", row['PassengerCountry'] or "N/A")
                 with col2:
-                    st.write("**Aircraft:**", row['aircraft'] or "N/A")
+                    st.write("**Aircraft:**", row['Aircraft'] or "N/A")
                 with col3:
                     st.write("**Date:**", row['DatePublished'])
         
@@ -234,4 +234,4 @@ elif page == "📊 Sentiment Dashboard":
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("**🛫 Ryanair Review Analysis System**")
-st.sidebar.markdown("Powered by Llama 3.2 & Streamlit")
+st.sidebar.markdown("Powered by HuggingFace & Streamlit")
