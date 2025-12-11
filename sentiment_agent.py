@@ -70,11 +70,11 @@ Review: "{review_text}"
             with engine.connect() as conn:
                 # SQLite ALTER TABLE syntax
                 try:
-                    conn.execute(text("ALTER TABLE ryanair_reviews ADD COLUMN sentiment TEXT"))
+                    conn.execute(text("ALTER TABLE ryanair_reviews ADD COLUMN Sentiment TEXT"))
                 except:
                     pass  # Column already exists
                 try:
-                    conn.execute(text("ALTER TABLE ryanair_reviews ADD COLUMN sentiment_reason TEXT"))
+                    conn.execute(text("ALTER TABLE ryanair_reviews ADD COLUMN SentimentReason TEXT"))
                 except:
                     pass  # Column already exists
                 conn.commit()
@@ -91,7 +91,7 @@ Review: "{review_text}"
             count_query = """
                 SELECT COUNT(*) as unprocessed_count
                 FROM ryanair_reviews 
-                WHERE (sentiment IS NULL OR sentiment = '') AND Comment IS NOT NULL AND Comment != ''
+                WHERE (Sentiment IS NULL OR Sentiment = '') AND Comment IS NOT NULL AND Comment != ''
             """
             count_df = pd.read_sql(count_query, engine)
             total_unprocessed = count_df.iloc[0]['unprocessed_count']
@@ -105,7 +105,7 @@ Review: "{review_text}"
             query = """
                 SELECT id, Comment as comment 
                 FROM ryanair_reviews 
-                WHERE (sentiment IS NULL OR sentiment = '') 
+                WHERE (Sentiment IS NULL OR Sentiment = '') 
                 AND Comment IS NOT NULL AND Comment != ''
                 ORDER BY id
             """
@@ -158,7 +158,7 @@ Review: "{review_text}"
                         Comment, "OverallRating", "PassengerCountry", Aircraft, 
                         "TypeOfTraveller", Origin, Destination, "DatePublished"
                     )
-                    VALUES (:comment, :rating, :country, :aircraft, :travellertype, :origin, :destination, date('now'))
+                    VALUES (:Comment, :Rating, :Country, :Aircraft, :TravellerType, :Origin, :Destination, date('now'))
                 """), {
                     'Comment': Comment,
                     'Rating': Rating,
