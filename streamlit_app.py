@@ -145,9 +145,9 @@ elif page == "📊 Sentiment Dashboard":
             
             query = """
                 SELECT id, Comment as comment, sentiment, sentiment_reason, 
-                       "Overall Rating" as overall_rating, 
-                       "Passenger Country" as passenger_country, 
-                       Aircraft as aircraft, "Date Published" as date_published
+                       "OverallRating" as overall_rating, 
+                       "PassengerCountry" as passenger_country, 
+                       Aircraft as aircraft, "DatePublished" as date_published
                 FROM ryanair_reviews 
                 WHERE sentiment IS NOT NULL AND sentiment != ''
                 ORDER BY id DESC
