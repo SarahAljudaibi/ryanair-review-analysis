@@ -144,10 +144,10 @@ elif page == "📊 Sentiment Dashboard":
             engine = get_sqlite_engine()
             
             query = """
-                SELECT id, Comment as comment, Sentiment, SentimentReason, 
-                       "OverallRating" as overall_rating, 
-                       "PassengerCountry" as passenger_country, 
-                       Aircraft as aircraft, "DatePublished" as date_published
+                SELECT id, Comment as Comment, Sentiment, SentimentReason, 
+                       "OverallRating" as OverallRating, 
+                       "PassengerCountry" as PassengerCountry, 
+                       Aircraft as Aircraft, "DatePublished" as DatePublished
                 FROM ryanair_reviews 
                 WHERE Sentiment IS NOT NULL AND Sentiment != ''
                 ORDER BY id DESC
@@ -168,20 +168,20 @@ elif page == "📊 Sentiment Dashboard":
             st.metric("Total Reviews", len(df))
         
         with col2:
-            positive_pct = (df['sentiment'] == 'Positive').mean() * 100
+            positive_pct = (df['Sentiment'] == 'Positive').mean() * 100
             st.metric("Positive %", f"{positive_pct:.1f}%")
         
         with col3:
-            negative_pct = (df['sentiment'] == 'Negative').mean() * 100
+            negative_pct = (df['Sentiment'] == 'Negative').mean() * 100
             st.metric("Negative %", f"{negative_pct:.1f}%")
         
         with col4:
-            avg_rating = df['overall_rating'].mean()
+            avg_rating = df['OverallRating'].mean()
             st.metric("Avg Rating", f"{avg_rating:.1f}/10")
         
         # Sentiment distribution
         st.subheader("📈 Sentiment Distribution")
-        sentiment_counts = df['sentiment'].value_counts()
+        sentiment_counts = df['Sentiment'].value_counts()
         st.bar_chart(sentiment_counts)
         
         # Filters
@@ -189,10 +189,10 @@ elif page == "📊 Sentiment Dashboard":
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            sentiment_filter = st.selectbox("Sentiment", ["All"] + list(df['sentiment'].unique()))
+            sentiment_filter = st.selectbox("Sentiment", ["All"] + list(df['Sentiment'].unique()))
         
         with col2:
-            country_filter = st.selectbox("Country", ["All"] + list(df['passenger_country'].dropna().unique()))
+            country_filter = st.selectbox("Country", ["All"] + list(df['PassengerCountry'].dropna().unique()))
         
         with col3:
             min_rating = st.slider("Min Rating", 1, 10, 1)
@@ -200,28 +200,28 @@ elif page == "📊 Sentiment Dashboard":
         # Apply filters
         filtered_df = df.copy()
         if sentiment_filter != "All":
-            filtered_df = filtered_df[filtered_df['sentiment'] == sentiment_filter]
+            filtered_df = filtered_df[filtered_df['Sentiment'] == sentiment_filter]
         if country_filter != "All":
-            filtered_df = filtered_df[filtered_df['passenger_country'] == country_filter]
-        filtered_df = filtered_df[filtered_df['overall_rating'] >= min_rating]
+            filtered_df = filtered_df[filtered_df['PassengerCountry'] == country_filter]
+        filtered_df = filtered_df[filtered_df['OverallRating'] >= min_rating]
         
         # Display filtered results
         st.subheader(f"📋 Reviews ({len(filtered_df)} results)")
         
         for _, row in filtered_df.head(20).iterrows():
             # Show preview of comment in expander title
-            comment_preview = row['comment'][:50] + "..." if len(str(row['comment'])) > 50 else row['comment']
-            with st.expander(f"Review #{row['id']} - {row['sentiment']} ({row['overall_rating']}/10) - {comment_preview}"):
-                st.markdown(f"**Full Comment:**\n\n{row['comment']}")
-                st.write("**Sentiment Reason:**", row['sentiment_reason'])
+            comment_preview = row['Comment'][:50] + "..." if len(str(row['Comment'])) > 50 else row['Comment']
+            with st.expander(f"Review #{row['id']} - {row['Sentiment']} ({row['OverallRating']}/10) - {comment_preview}"):
+                st.markdown(f"**Full Comment:**\n\n{row['Comment']}")
+                st.write("**Sentiment Reason:**", row['SentimentReason'])
                 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.write("**Country:**", row['passenger_country'] or "N/A")
+                    st.write("**Country:**", row['PassengerCountry'] or "N/A")
                 with col2:
                     st.write("**Aircraft:**", row['aircraft'] or "N/A")
                 with col3:
-                    st.write("**Date:**", row['date_published'])
+                    st.write("**Date:**", row['DatePublished'])
         
         # Refresh button
         if st.button("🔄 Refresh Data"):
