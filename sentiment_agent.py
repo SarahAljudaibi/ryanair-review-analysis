@@ -134,7 +134,7 @@ Review: "{review_text}"
                     with engine.connect() as conn:
                         conn.execute(text("""
                             UPDATE ryanair_reviews 
-                            SET sentiment = :sentiment, SentimentReason = :reason 
+                            SET Sentiment = :sentiment, SentimentReason = :reason 
                             WHERE id = :id
                         """), {
                             'sentiment': sentiment_result['sentiment'],
@@ -155,18 +155,18 @@ Review: "{review_text}"
             with engine.connect() as conn:
                 result = conn.execute(text("""
                     INSERT INTO ryanair_reviews (
-                        Comment, "OverallRating", "PassengerCountry", Aircraft, 
-                        "TypeOfTraveller", Origin, Destination, "DatePublished"
+                        Comment, OverallRating, PassengerCountry, Aircraft, 
+                        TypeOfTraveller, Origin, Destination, DatePublished
                     )
-                    VALUES (:Comment, :Rating, :Country, :Aircraft, :TravellerType, :Origin, :Destination, date('now'))
+                    VALUES (:comment, :rating, :country, :aircraft, :traveller_type, :origin, :destination, date('now'))
                 """), {
-                    'Comment': Comment,
-                    'Rating': Rating,
-                    'Country': Country,
-                    'Aircraft': Aircraft,
-                    'TravellerType': TravellerType,
-                    'Origin': Origin,
-                    'Destination': Destination
+                    'comment': comment,
+                    'rating': rating,
+                    'country': country,
+                    'aircraft': aircraft,
+                    'traveller_type': traveller_type,
+                    'origin': origin,
+                    'destination': destination
                 })
                 conn.commit()
                 return result.lastrowid
@@ -189,30 +189,30 @@ Review: "{review_text}"
             
             for _, row in df.iterrows():
                 # Extract data from row
-                comment = row.get('Comment', row.get('review', ''))
-                rating = row.get('OverallRating', row.get('rating', None))
-                country = row.get('PassengerCountry', row.get('country', None))
-                aircraft = row.get('Aircraft', None)
-                traveller_type = row.get('TypeOfTraveller', row.get('TravellerType', None))
-                origin = row.get('Origin', None)
-                destination = row.get('Destination', None)
+                comment = row.get('comment', row.get('review', ''))
+                rating = row.get('overall_rating', row.get('rating', None))
+                country = row.get('passenger_country', row.get('country', None))
+                aircraft = row.get('aircraft', None)
+                traveller_type = row.get('type_of_traveller', row.get('traveller_type', None))
+                origin = row.get('origin', None)
+                destination = row.get('destination', None)
                 
                 if comment:  # Only add if comment exists
                     with engine.connect() as conn:
                         result = conn.execute(text("""
                             INSERT INTO ryanair_reviews (
-                                Comment, "OverallRating", "PassengerCountry", Aircraft,
-                                "TypeOfTraveller", Origin, Destination, "DatePublished"
+                                Comment, OverallRating, PassengerCountry, Aircraft,
+                                TypeOfTraveller, Origin, Destination, DatePublished
                             )
-                            VALUES (:Comment, :Rating, :Country, :Aircraft, :TravellerType, :Origin, :Destination, date('now'))
+                            VALUES (:comment, :rating, :country, :aircraft, :traveller_type, :origin, :destination, date('now'))
                         """), {
-                            'comment': Comment,
-                            'Rating': Rating,
-                            'Country': Country,
-                            'Aircraft': Aircraft,
-                            'TravellerType': TravellerType,
-                            'Origin': Origin,
-                            'Destination': Destination
+                            'comment': comment,
+                            'rating': rating,
+                            'country': country,
+                            'aircraft': aircraft,
+                            'traveller_type': traveller_type,
+                            'origin': origin,
+                            'destination': destination
                         })
                         conn.commit()
                         review_ids.append(result.lastrowid)
@@ -256,7 +256,7 @@ Review: "{review_text}"
                 with engine.connect() as conn:
                     conn.execute(text("""
                         UPDATE ryanair_reviews 
-                        SET sentiment = :sentiment, SentimentReason = :reason 
+                        SET Sentiment = :sentiment, SentimentReason = :reason 
                         WHERE id = :id
                     """), {
                         'sentiment': sentiment_result['sentiment'],
