@@ -67,7 +67,7 @@ def main():
                     # Add review to database
                     sentiment_agent.add_sentiment_column()
                     review_id = sentiment_agent.add_new_review(
-                        comment, rating, country, aircraft, traveller_type, origin, destination
+                        Comment, Rating, Country, Aircraft, TravellerType, Origin, Destination
                     )
                     
                     if review_id:
